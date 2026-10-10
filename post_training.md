@@ -78,8 +78,8 @@ Decided without asking:
   trials and is kept as a second run). The hack proxy is a summed per-step closeness reward
   (an averaged version barely got hacked). 3 seeds run in parallel; the live demo and gallery use seed 0;
   snapshots every 20 iterations are stored as float16. The v1 single-seed run is archived in runs_v1/.
-- README, INSTRUCTIONS, FILE-STRUCTURE are written now, though the project is not on GitHub
-  yet, so it is ready if you publish it later.
+- README, INSTRUCTIONS, FILE-STRUCTURE were written before publishing, so they were ready when
+  the repo went on GitHub.
 
 CHANGELOG:
 
@@ -104,3 +104,4 @@ CHANGELOG:
 - 2026-10-08 — final run: SFT 71% → GRPO 85% test success (hard OOD 63% → 75%); README screenshots; train.py --from-runs
 - 2026-10-09 — added DPO (+NLL and plain), reward-hacking run, training scrubber, 3-seed bands; split train.py / export.py
 - 2026-10-09 — published to GitHub as public repo PostTrainingLab
+- 2026-10-10 — 3-seed results exported (SFT 70% → GRPO 80%, DPO 81%, reward hacker 7%); stage-level resume in train.py; README screenshots refreshed

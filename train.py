@@ -10,6 +10,11 @@ Writes runs/seed<N>/: results.json, <stage>.pt, and snaps/<run>_<iter>.pt
 (GRPO and reward-hacker snapshots for the website's training scrubber).
 Run several seeds (in parallel if you like), then `python export.py` to build
 the website data. `--quick` shrinks everything and writes to runs_quick/.
+
+Each finished stage is saved as it completes (<stage>.pt + partial.json), so a
+run that dies can be restarted with the same command and skips finished
+stages. A resumed run draws different training levels than an uninterrupted
+one would, so it is not bit-identical.
 """
 import argparse
 import copy
@@ -78,23 +83,50 @@ def main():
     def sample_levels(n):
         return sample_train_levels(n, rng, banned)
 
-    log(f"making {cfg['demos']} demos (habit {cfg['habit']}, noise {cfg['noise']})")
-    demos = make_demos(sample_levels(cfg["demos"]), cfg["noise"], rng,
-                       habit=cfg["habit"], successes_only=True)
-    val = make_demos(sample_levels(200), 0.0, rng)  # clean expert labels
-    log(f"demonstrator solved {demos[2]:.1%} of levels; kept {len(demos[0])} transitions")
+    # ---- resume support: every finished stage is saved immediately ----
+    partial_path = out / "partial.json"
+    part = json.loads(partial_path.read_text()) if partial_path.exists() else {}
+    policies = {}
+    evals, hist, meta = part.get("evals", {}), part.get("history", {}), part.get("meta", {})
+    elapsed_before = meta.get("elapsed", 0.0)
 
-    policies, evals, hist = {}, {}, {}
-    policies["random"] = Policy()
+    def finished(name):
+        return name in evals and (out / f"{name}.pt").exists()
+
+    def restore(name):
+        policies[name] = Policy()
+        policies[name].load_state_dict(torch.load(out / f"{name}.pt"))
+        log(f"{name}: restored from an earlier run")
+
+    def save_stage(name):
+        torch.save(policies[name].state_dict(), out / f"{name}.pt")
+        meta["elapsed"] = elapsed_before + time.time() - t0
+        partial_path.write_text(json.dumps(dict(evals=evals, history=hist, meta=meta)))
+
+    if finished("random"):
+        restore("random")
+    else:
+        policies["random"] = Policy()
+        evals["random"] = suite(policies["random"])
+        save_stage("random")
     init_state = copy.deepcopy(policies["random"].state_dict())
-    evals["random"] = suite(policies["random"])
 
-    sft = Policy()
-    sft.load_state_dict(init_state)
-    hist["sft"] = train_sft(sft, demos, val, suite, steps=cfg["sft_steps"], lr=cfg["sft_lr"],
-                            eval_every=max(cfg["sft_steps"] // 5, 1), seed=args.seed, log=log)
-    policies["sft"] = sft
-    evals["sft"] = hist["sft"][-1].get("eval") or suite(sft)
+    if finished("sft"):
+        restore("sft")
+    else:
+        log(f"making {cfg['demos']} demos (habit {cfg['habit']}, noise {cfg['noise']})")
+        demos = make_demos(sample_levels(cfg["demos"]), cfg["noise"], rng,
+                           habit=cfg["habit"], successes_only=True)
+        val = make_demos(sample_levels(200), 0.0, rng)  # clean expert labels
+        meta.update(demo_transitions=int(len(demos[0])), demo_success=demos[2])
+        log(f"demonstrator solved {demos[2]:.1%} of levels; kept {len(demos[0])} transitions")
+        policies["sft"] = Policy()
+        policies["sft"].load_state_dict(init_state)
+        hist["sft"] = train_sft(policies["sft"], demos, val, suite, steps=cfg["sft_steps"], lr=cfg["sft_lr"],
+                                eval_every=max(cfg["sft_steps"] // 5, 1), seed=args.seed, log=log)
+        evals["sft"] = hist["sft"][-1].get("eval") or suite(policies["sft"])
+        save_stage("sft")
+    sft = policies["sft"]
 
     def frozen(model):
         ref = copy.deepcopy(model).eval()
@@ -111,6 +143,8 @@ def main():
         return snap
 
     def grpo_run(name, start, ref, beta, reward_fn=None, snapshot=None):
+        if finished(name):
+            return restore(name)
         log(f"{name}: GRPO" + (" on the proxy reward" if reward_fn else ""))
         pol = copy.deepcopy(start)
         hist[name] = train_grpo(pol, ref, suite, sample_levels, iters=cfg["grpo_iters"],
@@ -119,20 +153,28 @@ def main():
                                 seed=args.seed, log=log, snapshot=snapshot, reward_fn=reward_fn)
         policies[name] = pol
         evals[name] = hist[name][-1].get("eval") or suite(pol)
+        save_stage(name)
 
     grpo_run("grpo", sft, frozen(sft), cfg["beta"], snapshot=snapper("grpo"))
 
-    log("dpo: sampling preference pairs from SFT")
-    n_dpo_levels = cfg["grpo_iters"] * cfg["levels_per_iter"]
-    pairs = make_pairs(sft, sample_levels(n_dpo_levels), group=cfg["group"], seed=args.seed)
-    log(f"dpo: {pairs['stats']}")
+    pairs = None
     for name, nll in [("dpo", cfg["dpo_nll"]), ("dpo_plain", 0.0)]:
+        if finished(name):
+            restore(name)
+            continue
+        if pairs is None:
+            log("dpo: sampling preference pairs from SFT")
+            n_dpo_levels = cfg["grpo_iters"] * cfg["levels_per_iter"]
+            pairs = make_pairs(sft, sample_levels(n_dpo_levels), group=cfg["group"], seed=args.seed)
+            meta["dpo_stats"] = pairs["stats"]
+            log(f"dpo: {pairs['stats']}")
         pol = copy.deepcopy(sft)
         hist[name] = train_dpo(pol, frozen(sft), pairs, suite, epochs=cfg["dpo_epochs"], lr=cfg["dpo_lr"],
                                beta=cfg["dpo_beta"], nll=nll, eval_every=cfg["dpo_eval_every"],
                                seed=args.seed, log=log, tag=name)
         policies[name] = pol
         evals[name] = hist[name][-1]["eval"]
+        save_stage(name)
 
     grpo_run("hack", sft, frozen(sft), cfg["beta"], reward_fn=closeness_reward, snapshot=snapper("hack"))
 
@@ -145,8 +187,8 @@ def main():
         torch.save(policies[s].state_dict(), out / f"{s}.pt")
 
     results = dict(seed=args.seed, config=cfg, labels=LABELS, stages=STAGES, evals=evals,
-                   history=hist, demo_transitions=int(len(demos[0])), demo_success=demos[2],
-                   dpo_stats=pairs["stats"], runtime_sec=time.time() - t0, log=log_lines)
+                   history=hist, demo_transitions=meta["demo_transitions"], demo_success=meta["demo_success"],
+                   dpo_stats=meta["dpo_stats"], runtime_sec=elapsed_before + time.time() - t0, log=log_lines)
     (out / "results.json").write_text(json.dumps(results, indent=1))
     log("done")
     for s in STAGES:

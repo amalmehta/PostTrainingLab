@@ -443,8 +443,8 @@
   }
   $("#notesList").innerHTML = [
     `<b>SFT copies the habit along with the skill.</b> The demonstrator walks straight at its target ${pct(cfg.habit)} of
-      the time. SFT's actions match the clean planner only ${pct(sftAcc)} of the time, and greedy decoding, which always takes the
-      habit, walks into walls and loops. It solves ${pct(M("sft", "test", "success"))} of test mazes.`,
+      the time. SFT's top action agrees with the clean planner in ${pct(sftAcc)} of states, but the rest are enough: greedy decoding
+      follows the habit into a wall, and a deterministic policy that loops once loops forever. It solves ${pct(M("sft", "test", "success"))} of test mazes.`,
     `<b>GRPO breaks the habit.</b> Greedy test success goes ${pct(M("sft", "test", "success"))} → ${pct(M("grpo", "test", "success"))}
       and sampled success ${pct(M("sft", "test", "sample_success"))} → ${pct(M("grpo", "test", "sample_success"))} (mean of ${NS} seed${NS > 1 ? "s" : ""}).`,
     `<b>Online vs offline.</b> DPO sees the same number of episodes but never samples from its own updated policy.
@@ -455,7 +455,8 @@
       samples, just not in its argmax. After GRPO, pass@8 is ${pct(M("grpo", "test", "pass_at_k"))} while greedy rises to ${pct(M("grpo", "test", "success"))}.`,
     `<b>Optimising the wrong number.</b> On the closeness proxy, GRPO moves the proxy ${M("sft", "test", "proxy").toFixed(2)} → ${M("hack", "test", "proxy").toFixed(2)}
       and true success ${pct(M("sft", "test", "success"))} → ${pct(M("hack", "test", "success"))}; sampled episodes end up ${hackLen.toFixed(0)} of ${C.MAX_STEPS} steps long.
-      Only the eval on the true metric reveals it.`,
+      Even random init (${M("random", "test", "proxy").toFixed(2)}) outscores SFT (${M("sft", "test", "proxy").toFixed(2)}) on the proxy,
+      because wandering never ends the episode. Only the eval on the true metric reveals the problem.`,
     `<b>Warm starts matter under sparse reward.</b> From random init, ${pct(deadScratch)} of GRPO groups in the first 10 iterations
       had every attempt fail. Identical rewards give zero advantage, hence no gradient. RL from scratch reaches ${pct(M("scratch", "test", "success"))} in the same budget.`,
     `<b>Dead groups come back at the end, for the opposite reason.</b> Late in GRPO, ${pct(deadGrpo)} of groups have every attempt succeed,

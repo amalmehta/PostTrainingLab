@@ -63,7 +63,11 @@ flowchart LR
 5. **DPO**: sample 3,840 levels × 8 attempts from SFT (the same episode count GRPO uses), build pairs, then train 3 epochs with β=0.1 and lr 1e-4. This runs twice, with NLL weight 1.0 (`dpo`) and 0 (`dpo_plain`).
 6. **Reward hacker**: identical to step 4, but trained on the proxy reward (snapshots too).
 7. **RL from scratch**: GRPO from the same random init, no KL.
-8. Score every checkpoint on the true metrics and the proxy, then write `runs/seedN/`.
+8. Score every checkpoint on the true metrics and the proxy, then write `runs/seedN/results.json`.
+
+Each stage writes `<stage>.pt` and updates `partial.json` as soon as it finishes. Rerunning the same
+command resumes at the first unfinished stage. This was added after seed 0 was killed mid-run
+under heavy machine load. A resumed seed draws different training levels than an uninterrupted one would.
 
 **Export (`export.py`)**: aggregates the seeds and rebuilds the gallery (24 samples + a greedy run per checkpoint on 4 test levels). It writes `results.js` plus `checkpoints.js`, which holds the float32 final checkpoints and the float16 snapshots.
 
@@ -76,7 +80,8 @@ flowchart LR
 | Per-seed metrics, histories, DPO pair stats | `runs/seedN/results.json` | One file per seed. |
 | Trained weights | `runs/seedN/*.pt`, `runs/seedN/snaps/*.pt` | Seven stages plus GRPO/hacker snapshots. |
 | Website data | `site/data/results.js`, `site/data/checkpoints.js` | Built by `export.py`. Live demo and snapshots come from seed 0. |
-| Logs | `runs/train_seedN.log` | One per seed. |
+| Logs | `runs/train_seedN.log` | One per seed (`train_seed0_crashed.log` is the killed first attempt). |
+| Resume state | `runs/seedN/partial.json` | Evals and histories of finished stages. |
 | First single-seed run (v1) | `runs_v1/` | Archived for reference; not used by the site. |
 | Smoke-test output | `runs_quick/` | From `--quick`; `export.py --quick` publishes it to the site (and is overwritten by the next full export). |
 

@@ -36,6 +36,10 @@ hacker and RL from scratch. That takes a few hours on a 2019 Intel MacBook Pro,
 and much longer if the machine is busy. Follow along with
 `tail -f runs/train_seed0.log`.
 
+If a seed dies (for example, killed under memory pressure), rerun the same
+command. Each finished stage is saved as it completes, so the restart skips straight
+to the first unfinished stage.
+
 When the seeds finish, build the website data (a few minutes):
 
 ```bash
