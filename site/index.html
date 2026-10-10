@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Post Training Lab</title>
+<meta name="description" content="A tiny transformer learns a key-and-door maze: SFT on habit-prone demos, then GRPO or DPO, plus a reward-hacking run. Live demo, training curves across seeds, and trajectory plots.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">Post Training Lab</a>
+    <nav>
+      <a href="#demo">Demo</a><a href="#pipeline">Pipeline</a><a href="#curves">Curves</a>
+      <a href="#dpo">DPO</a><a href="#hacking">Hacking</a><a href="#trajectories">Trajectories</a>
+      <a href="#evals">Evals</a><a href="#notes">Notes</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>From bad habits to a sharp policy</h1>
+    <p class="lede">A <span id="paramCount">tiny</span>-parameter transformer learns a key-and-door maze.
+      <b>SFT</b> on demos from a planner with a bad habit, then two ways to fix it: <b>GRPO</b>
+      (online RL on a verifiable reward) and <b>DPO</b> (offline, on preference pairs). A fourth run
+      shows what happens when the reward is subtly wrong. Results are averaged over
+      <span id="seedCount">several</span> seeds, and the demo runs the trained weights in your browser.</p>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section id="demo">
+    <h2>Live race: same level, four policies</h2>
+    <p class="sub">Each panel runs a checkpoint on the same maze, in your browser. Change a panel's checkpoint
+      from its title. Pick up the <span class="ico key"></span> key, go through the <span class="ico door"></span>
+      door, reach the <span class="ico goal"></span> goal within 30 steps. Reward = 1 − 0.01 × steps on success, otherwise 0.</p>
+    <div class="controls" role="toolbar" aria-label="Demo controls">
+      <div class="seg" id="pool" role="group" aria-label="Level set">
+        <button data-v="test" class="on">In-distribution</button><button data-v="hard">Hard (OOD)</button>
+      </div>
+      <div class="group">
+        <button id="prev" aria-label="Previous level">‹</button>
+        <span id="levelLabel" class="mono"></span>
+        <button id="next" aria-label="Next level">›</button>
+        <button id="shuffle">Random level</button>
+      </div>
+      <div class="seg" id="decode" role="group" aria-label="Decoding">
+        <button data-v="greedy" class="on">Greedy</button><button data-v="sample">Sample</button>
+      </div>
+      <div class="group">
+        <button id="play" class="primary">▶ Play</button>
+        <button id="step">Step</button>
+        <button id="reset">Reset</button>
+      </div>
+      <label class="group speed">Speed <input id="speed" type="range" min="1" max="20" value="8"></label>
+      <label class="group"><input type="checkbox" id="edit"> Edit walls</label>
+    </div>
+    <div class="scrub">
+      <span>Training scrubber</span>
+      <input id="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Training iteration">
+      <b id="scrubLabel"></b>
+      <span id="scrubHint">rewinds the GRPO and Reward-hacker panels to a training snapshot (iteration 0 = SFT)</span>
+    </div>
+    <p class="hint" id="editHint" hidden>Click any interior cell in any panel to toggle a wall. Unsolvable mazes are refused.</p>
+    <div class="race" id="race"></div>
+  </section>
+
+  <section id="pipeline">
+    <h2>Pipeline</h2>
+    <p class="sub">All runs share one random init per seed. Every checkpoint is scored by the same held-out eval suite;
+      eval levels are hashed and excluded from all training data.</p>
+    <div class="diagram" id="diagram"></div>
+    <div class="cards" id="configCards"></div>
+  </section>
+
+  <section id="curves">
+    <h2>Training curves</h2>
+    <p class="sub">Lines are the mean over seeds; the shaded band spans the best and worst seed.</p>
+    <h3>Stage 1 · SFT on habit-prone demos</h3>
+    <p class="sub">Cross-entropy on demo actions. Validation labels come from the <em>clean</em> planner, so
+      validation accuracy measures how much of the habit the model has picked up.</p>
+    <div class="grid2" id="sftCharts"></div>
+    <h3>Stage 2 · GRPO vs RL from scratch</h3>
+    <div class="legend" id="rlLegend"></div>
+    <div class="grid3" id="rlCharts"></div>
+  </section>
+
+  <section id="dpo">
+    <h2>DPO: the offline alternative</h2>
+    <p class="sub" id="dpoSub"></p>
+    <div class="legend" id="dpoLegend"></div>
+    <div class="grid3" id="dpoCharts"></div>
+  </section>
+
+  <section id="hacking">
+    <h2>Reward hacking</h2>
+    <p class="callout" id="hackCallout"></p>
+    <div class="legend" id="hackLegend"></div>
+    <div class="grid3" id="hackCharts"></div>
+  </section>
+
+  <section id="trajectories">
+    <h2>Trajectory fans</h2>
+    <p class="sub">Sampled attempts (temperature 1) on held-out levels of rising difficulty, seed 0. Each thin line is
+      one episode: <span class="sw ok"></span> solved, <span class="sw bad"></span> failed. The thick line is the
+      checkpoint's greedy path.</p>
+    <div id="gallery"></div>
+    <h3>Success vs maze difficulty</h3>
+    <p class="sub">Greedy success on the in-distribution test set (seed 0), bucketed by the optimal path length.</p>
+    <div class="legend" id="bucketLegend"></div>
+    <div id="bucketChart" class="chart wide"></div>
+  </section>
+
+  <section id="evals">
+    <h2>Eval suite</h2>
+    <p class="sub">Fixed held-out sets: <b>test</b> (same distribution as training) and <b>hard</b> (denser walls,
+      never trained on). Cells show the mean over seeds, with ± one standard deviation. pass@8 is the unbiased
+      estimator from 8 samples; <em>sampled</em> is the average success of those samples. <em>Proxy</em> is the
+      hackable closeness reward. (Efficiency, optimal ÷ taken steps, is 1.00 for every checkpoint: when greedy
+      decoding succeeds it takes the shortest route, so it is left out.)</p>
+    <div class="tablewrap"><table id="evalTable"></table></div>
+  </section>
+
+  <section id="notes">
+    <h2>What to notice</h2>
+    <ul class="notes" id="notesList"></ul>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  Post Training Lab · trained on a laptop CPU · <span id="runtime"></span>
+</footer>
+
+<script src="js/core.js"></script>
+<script src="data/results.js"></script>
+<script src="data/checkpoints.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
