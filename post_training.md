@@ -55,6 +55,7 @@ Asked and answered (2026-10-07):
   human-style demos, then GRPO with a verifiable reward; held-out eval suite.
 - Scope: static website only. It is treated as script + website, so no Mac app, feedback tab or settings.
 - Publishing: local only (no GitHub repo, no hosting).
+  Changed 2026-10-09: you asked to publish; public GitHub repo amalmehta/PostTrainingLab (no hosting).
 - Shut down the iOS Simulators that were saturating the CPU (approved).
 
 Decided without asking:
@@ -102,3 +103,4 @@ CHANGELOG:
 - 2026-10-08 — built: Key & Door env, SFT + GRPO pipeline, eval suite, project website, docs
 - 2026-10-08 — final run: SFT 71% → GRPO 85% test success (hard OOD 63% → 75%); README screenshots; train.py --from-runs
 - 2026-10-09 — added DPO (+NLL and plain), reward-hacking run, training scrubber, 3-seed bands; split train.py / export.py
+- 2026-10-09 — published to GitHub as public repo PostTrainingLab
