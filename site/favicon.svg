@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Post Training Lab: the key from the key-and-door maze the model learns to solve. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#F3FAF5"/>
+      <stop offset="1" stop-color="#CDE8DC"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <g transform="rotate(-45 512 512) translate(52 0)">
+    <circle cx="330" cy="512" r="150" fill="#F2B544" stroke="#25544D" stroke-width="56"/>
+    <circle cx="330" cy="512" r="46" fill="#25544D"/>
+    <path d="M520 512 H800" stroke="#25544D" stroke-width="64" stroke-linecap="round" fill="none"/>
+    <path d="M676 512 V626 M770 512 V596" stroke="#25544D" stroke-width="60" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>
